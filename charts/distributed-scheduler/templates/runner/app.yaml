@@ -1,0 +1,10 @@
+{{ $data := dict "Values" .Values.runner }}
+  {{- if .Values.runner.enabled }}
+{{- include "distributed-scheduler.service.tpl" (merge (dict "Args" $data) .) }}
+---
+{{- include "distributed-scheduler.deployment.tpl" (merge (dict "Args" $data) .) }}
+---
+{{- include "distributed-scheduler.environment.tpl" (merge (dict "Args" $data) .) }}
+---
+{{- include "distributed-scheduler.hpa.tpl" (merge (dict "Args" $data) .) }}
+  {{- end -}}

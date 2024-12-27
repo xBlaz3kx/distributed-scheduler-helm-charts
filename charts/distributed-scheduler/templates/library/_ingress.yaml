@@ -1,0 +1,45 @@
+{{- define "distributed-scheduler.ingress.tpl" -}}
+{{- if .Values.ingress.enabled -}}
+{{- $svcPort := .Args.Values.servicePort | default .Values.service.port -}}
+{{- if semverCompare ">=1.14-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1
+{{- else -}}
+apiVersion: networking.k8s.io/v1
+{{- end }}
+kind: Ingress
+metadata:
+  name: {{ .Args.Values.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "distributed-scheduler.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{ if $.Args.Values.middlewares }}
+    traefik.ingress.kubernetes.io/router.middlewares: ory-oathkeeper@kubernetescrd
+    {{- end }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  tls:
+    {{ range $key, $value := .Args.Values.aliases }}
+    - hosts:
+        - {{ $value.host | quote }}
+      secretName: tls-spectre-{{ $.Args.Values.secretName | default "api" }}
+    {{- end }}
+  rules:
+    {{ range $key, $value := .Args.Values.aliases }}
+    - host: {{ $value.host | quote }}
+      http:
+        paths:
+          {{ range $value.paths }}
+          - path: {{ . | quote }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $.Args.Values.name }}
+                port:
+                  number: {{ $svcPort }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

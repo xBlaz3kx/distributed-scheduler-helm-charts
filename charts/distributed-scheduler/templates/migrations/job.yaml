@@ -1,0 +1,62 @@
+{{- include "distributed-scheduler.automigration.typeVerification" . -}}
+  {{- if and  ( .Values.automigration.enabled ) ( eq .Values.automigration.type "job" ) }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "distributed-scheduler.fullname" . }}-automigrate
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- with .Values.job.annotations }}
+      {{- toYaml . | nindent 4 }}
+      {{- end }}
+  labels:
+    {{- include "distributed-scheduler.labels" . | nindent 4 }}
+spec:
+  template:
+    metadata:
+      annotations:
+        {{- with .Values.job.annotations }}
+          {{- toYaml . | nindent 8 }}
+          {{- end }}
+      labels:
+        {{- include "distributed-scheduler.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "distributed-scheduler.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.job.automountServiceAccountToken }}
+      containers:
+        - name: {{ .Chart.Name }}-automigrate
+          image: "{{ .Values.image.repository }}:{{- .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.automigration.customCommand }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.automigration.customArgs }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.manager.environment.createEnvConfigmap }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.manager.environment.name }}
+          {{- end }}
+          {{- if .Values.securityContext }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 10 }}
+          {{- end }}
+          {{- if .Values.job.extraContainers }}
+            {{- tpl .Values.job.extraContainers . | nindent 6 }}
+          {{- end }}
+          {{- if .Values.job.extraInitContainers }}
+      initContainers:
+        {{- tpl .Values.job.extraInitContainers . | nindent 8 }}
+        {{- end }}
+      restartPolicy: Never
+      shareProcessNamespace: {{ .Values.job.shareProcessNamespace }}
+    backoffLimit: {{ .Values.job.spec.backoffLimit }}
+  {{- end }}
