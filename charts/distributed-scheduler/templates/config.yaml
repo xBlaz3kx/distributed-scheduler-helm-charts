@@ -1,0 +1,35 @@
+{{- define "distributed-scheduler.config.tpl" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ .name }}-config
+  labels:
+    {{- include "distributed-scheduler.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- with .Values.database }}
+    db:
+      user: {{ .auth.username }}
+      password: {{ .auth.password }}
+      host: {{ .host }}
+      name: {{ .auth.database }}
+      disableTLS: true
+    {{- end }}
+
+    http:
+      address: ":8000" # the address to listen to
+      tls:
+        isEnabled: false # is TLS enabled
+
+    {{- with .Values.observability }}
+    observability:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+    {{- with .Values.runner.config.jobExecutionSettings }}
+    jobExecutionSettings:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+
+{{- end }}

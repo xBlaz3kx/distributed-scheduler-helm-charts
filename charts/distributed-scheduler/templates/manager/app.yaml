@@ -1,12 +1,11 @@
 {{ $data := dict "Values" .Values.manager }}
-{{- if .Values.manager.enabled }}
-{{- include "distributed-scheduler.ingress.tpl" (merge (dict "Args" $data) .) }}
 ---
-{{- include "distributed-scheduler.service.tpl" (merge (dict "Args" $data) .) }}
+{{- include "distributed-scheduler.service.tpl" (merge (dict "Args" $data) . (dict "name" (printf "%s-%s" (include "distributed-scheduler.fullname" .) "manager" ) )) }}
 ---
-{{- include "distributed-scheduler.deployment.tpl" (merge (dict "Args" $data) .) }}
+{{- include "distributed-scheduler.environment.tpl" (merge (dict "Args" .Values.manager.environment) . )}}
 ---
-{{- include "distributed-scheduler.environment.tpl" (merge (dict "Args" $data) .) }}
+{{$configName := printf "%s-%s" (include "distributed-scheduler.name" . ) "manager-config"}}
+{{- include "distributed-scheduler.config.tpl"  (merge . (dict "name" $configName) )}}
 ---
-{{- include "distributed-scheduler.hpa.tpl" (merge (dict "Args" $data) .) }}
-{{- end -}}
+{{$svcName := printf "%s-%s" (include "distributed-scheduler.name" . ) "manager"}}
+{{- include "distributed-scheduler.hpa.tpl"  (merge . (dict "Args" (dict "name" $svcName))) }}

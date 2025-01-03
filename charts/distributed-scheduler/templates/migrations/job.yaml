@@ -1,5 +1,6 @@
 {{- include "distributed-scheduler.automigration.typeVerification" . -}}
   {{- if and  ( .Values.automigration.enabled ) ( eq .Values.automigration.type "job" ) }}
+
 ---
 apiVersion: batch/v1
 kind: Job
@@ -7,7 +8,7 @@ metadata:
   name: {{ include "distributed-scheduler.fullname" . }}-automigrate
   namespace: {{ .Release.Namespace }}
   annotations:
-    {{- with .Values.job.annotations }}
+    {{- with .Values.automigration.job.annotations }}
       {{- toYaml . | nindent 4 }}
       {{- end }}
   labels:
@@ -16,22 +17,22 @@ spec:
   template:
     metadata:
       annotations:
-        {{- with .Values.job.annotations }}
+        {{- with .Values.automigration.job.annotations }}
           {{- toYaml . | nindent 8 }}
           {{- end }}
       labels:
         {{- include "distributed-scheduler.selectorLabels" . | nindent 8 }}
     spec:
-      {{- with .Values.imagePullSecrets }}
+      {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "distributed-scheduler.serviceAccountName" . }}
-      automountServiceAccountToken: {{ .Values.job.automountServiceAccountToken }}
+      automountServiceAccountToken: {{ .Values.automigration.job.automountServiceAccountToken }}
       containers:
-        - name: {{ .Chart.Name }}-automigrate
-          image: "{{ .Values.image.repository }}:{{- .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+        - name: {{ include "distributed-scheduler.name" . }}-automigrate
+          image: xblaz3kx/distributed-scheduler:manager-{{- .Values.global.version | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.global.pullPolicy }}
           {{- with .Values.automigration.customCommand }}
           command:
             {{- toYaml . | nindent 12 }}
@@ -43,20 +44,20 @@ spec:
           {{- if .Values.manager.environment.createEnvConfigmap }}
           envFrom:
             - configMapRef:
-                name: {{ .Values.manager.environment.name }}
+                name: {{ include "distributed-scheduler.name" . }}-migrate-env
           {{- end }}
           {{- if .Values.securityContext }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 10 }}
           {{- end }}
-          {{- if .Values.job.extraContainers }}
-            {{- tpl .Values.job.extraContainers . | nindent 6 }}
+          {{- if .Values.automigration.job.extraContainers }}
+            {{- tpl .Values.automigration.job.extraContainers . | nindent 6 }}
           {{- end }}
-          {{- if .Values.job.extraInitContainers }}
+          {{- if .Values.automigration.job.extraInitContainers }}
       initContainers:
-        {{- tpl .Values.job.extraInitContainers . | nindent 8 }}
+        {{- tpl .Values.automigration.job.extraInitContainers . | nindent 8 }}
         {{- end }}
       restartPolicy: Never
-      shareProcessNamespace: {{ .Values.job.shareProcessNamespace }}
-    backoffLimit: {{ .Values.job.spec.backoffLimit }}
+      shareProcessNamespace: {{ .Values.automigration.job.shareProcessNamespace }}
+    backoffLimit: {{ .Values.automigration.job.spec.backoffLimit }}
   {{- end }}

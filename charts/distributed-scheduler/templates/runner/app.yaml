@@ -1,10 +1,7 @@
-{{ $data := dict "Values" .Values.runner }}
-  {{- if .Values.runner.enabled }}
-{{- include "distributed-scheduler.service.tpl" (merge (dict "Args" $data) .) }}
 ---
-{{- include "distributed-scheduler.deployment.tpl" (merge (dict "Args" $data) .) }}
+{{$envName := printf "%s-%s" (include "distributed-scheduler.fullname" .) "runner-env"}}
+{{- include "distributed-scheduler.environment.tpl" (merge . (dict "Args" (merge .Values.runner.environment (dict "name" $envName)))) }}
 ---
-{{- include "distributed-scheduler.environment.tpl" (merge (dict "Args" $data) .) }}
----
-{{- include "distributed-scheduler.hpa.tpl" (merge (dict "Args" $data) .) }}
-  {{- end -}}
+
+{{$svcName := printf "%s-%s" (include "distributed-scheduler.fullname" .) "runner"}}
+{{- include "distributed-scheduler.hpa.tpl" (merge . (dict "Args" (dict "name" $svcName))) }}
