@@ -1,14 +1,14 @@
 {{- define "distributed-scheduler.environment.tpl" }}
-{{- if .Args.Values.environment.createEnvConfigmap }}
+{{- if .Args.createEnvConfigmap }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   namespace: {{ .Release.Namespace }}
-  name: {{ .Args.Values.environment.name }}
+  name: {{ .Args.name }}
   labels:
     {{- include "distributed-scheduler.labels" . | nindent 4 }}
 data:
-  {{- range $index, $value := .Args.Values.config }}
+  {{- range $index, $value := .Args.config }}
   {{ $index }}: {{$value | quote }}
   {{- end }}
 {{- end }}

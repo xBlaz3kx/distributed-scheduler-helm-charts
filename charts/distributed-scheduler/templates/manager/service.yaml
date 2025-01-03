@@ -6,7 +6,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "distributed-scheduler.labels" . | nindent 4 }}
-  {{- with .Values.service.annotations }}
+  {{- with .Args.Values.service.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}

@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "distributed-scheduler.fullname" . }}-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "distributed-scheduler.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.manager.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "distributed-scheduler.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "distributed-scheduler.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "distributed-scheduler.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "distributed-scheduler.name" . }}-manager-config
+      {{- with .Values.manager.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ include "distributed-scheduler.name" . }}-manager
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "xblaz3kx/distributed-scheduler:manager-{{ .Values.global.version | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.global.pullPolicy }}
+          {{- if .Values.manager.environment.createEnvConfigmap }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "distributed-scheduler.name" . }}-manager-env
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/manager/
+          {{- with .Values.manager.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.manager.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- with .Values.manager.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+        {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+          {{- with .Values.manager.lifecycle }}
+          lifecycle:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            initialDelaySeconds: 2
+            periodSeconds: 10
+            httpGet:
+              path: /healthz
+              port: 8000
+          readinessProbe:
+            initialDelaySeconds: 2
+            periodSeconds: 10
+            httpGet:
+              path: /healthz
+              port: 8000
+          resources:
+          {{- if .Values.manager.resources }}
+            {{- toYaml .Values.manager.resources | nindent 12 }}
+          {{- else }}
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.manager.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

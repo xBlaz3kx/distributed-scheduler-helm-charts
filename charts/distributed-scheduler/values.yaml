@@ -1,17 +1,9 @@
-# todo simplify values.yaml
-# Should only really ingest connection details and secrets
-# Everything else should be in the template
-
-replicaCount: 1
-
-image:
-  repository: xblaz3kx/distributed-scheduler
+global:
+  imagePullSecrets: [ ]
+  imageRegistry: ""
+  version: 0.1.2
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: manager-0.1.2
 
-imagePullSecrets:
-# - name: regcred
 nameOverride: ""
 fullnameOverride: ""
 
@@ -42,29 +34,25 @@ service:
   port: 8000
 
 ingress:
-  enabled: false
-  className: ""
-  # annotations:
-  #  kubernetes.io/ingress.class: traefik
-  # kubernetes.io/tls-acme: "true"
-  #hosts:
-  #  - host: chart-example.local
-  #    paths:
-  #      - path: /
-  #        pathType: Prefix
-  tls: [ ]
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    kubernetes.io/tls-acme: "false"
+  hosts:
+    # - host: chart-example.local
+    #   paths:
+    #     - /
 
-resources: { }
-# We usually recommend not to specify default resources and to leave this as a conscious
-# choice for the user. This also increases chances charts run on environments with little
-# resources, such as Minikube. If you do want to specify resources, uncomment the following
-# lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-# limits:
-#   cpu: 100m
-#   memory: 128Mi
-# requests:
-#   cpu: 100m
-#   memory: 128Mi
+    - host: scheduler.blaz-laptop.local
+      paths:
+        - /
+
+  # tls: [ ]
+
+nodeSelector: { }
+
+tolerations: [ ]
 
 autoscaling:
   enabled: false
@@ -73,155 +61,182 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
 
-liveness:
-  initialDelaySeconds: 2
-  periodSeconds: 10
-  httpGet:
-    path: /health
-    port: 8000
+database:
+  # Whether to deploy the database
+  deploy: false
+  nameOverride: "distributed-scheduler-postgresql"
+  auth:
+    username: admin
+    password: CHANGEME
+    database: "distributed-scheduler"
+  # Database configuration
+  host: "distributed-scheduler-postgresql.svc.cluster.local:5432"
 
-readiness:
-  initialDelaySeconds: 2
-  periodSeconds: 10
-  httpGet:
-    path: /health
-    port: 8000
 
-nodeSelector: { }
+# Observability configuration
+observability:
+  logging:
+    level: debug
+  metrics:
+    enabled: false
+    #address: collector-opentelemetry-collector.otel.svc.cluster.local:4317
 
-tolerations: [ ]
-
-# Scheduler Manager
+# Manager configuration
 manager:
-  enabled: true
-  name: scheduler-manager
-  image:
-    repository: xblaz3kx/distributed-scheduler
-    version: manager-0.1.2
-  config:
-    MANAGER_DB_HOST: CHANGEME
-    MANAGER_DB_USER: CHANGEME
-    MANAGER_DB_PASSWORD: CHANGE_ME
-    MANAGER_DB_NAME: CHANGEME
-    MANAGER_DB_DISABLETLS: "false"
-    MANAGER_STORAGE_ENCRYPTION_KEY: ishouldbechanged
-  environment:
-    name: scheduler-manager-environment
-    createEnvConfigmap: true
-  lifecycle:
-    preStop:
-      exec:
-        command: [ "sleep", "25" ]
-  aliases:
+  command:
+    - /app/manager
+  args:
+    - --config=/usr/local/manager/config.yaml
 
-# Scheduler Runner
-runner:
-  enabled: true
-  name: scheduler-runner
-  image:
-    repository: xblaz3kx/distributed-scheduler
-    version: runner-0.1.2
-  config:
-    RUNNER_DB_HOST: CHANGEME
-    RUNNER_DB_USER: CHANGEME
-    RUNNER_DB_PASSWORD: CHANGE_ME
-    RUNNER_DB_NAME: CHANGEME
-    RUNNER_DB_DISABLETLS: "false"
-    MANAGER_STORAGE_ENCRYPTION_KEY: ishouldbechanged
   environment:
-    name: scheduler-runner-environment
     createEnvConfigmap: true
-  lifecycle:
-    preStop:
-      exec:
-        command: [ "sleep", "25" ]
+    config:
+      # Encryption at rest key for the database
+      MANAGER_STORAGE_ENCRYPTION_KEY: ishouldbechanged
+
+  # Only applicable when autoscaling is disabled
+  replicaCount: 1
+
+  extraVolumes: { }
+  extraVolumeMounts: { }
+
+  resources: { }
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+# Runner configuration
+runner:
+  command:
+    - /app/runner
+  args:
+    - --config=/usr/local/runner/config.yaml
+
+  # Only applicable when autoscaling is disabled
+  replicaCount: 1
+  environment:
+    createEnvConfigmap: true
+    # Overrides the default configuration
+    config:
+      # Encryption at rest key for the database
+      RUNNER_STORAGE_ENCRYPTION_KEY: ishouldbechanged
+
+  config:
+    jobExecutionSettings:
+      interval: 1m
+      maxConcurrentJobs: 10
+
+  extraVolumes: { }
+  extraVolumeMounts: { }
+  resources: { }
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
 
 automigration:
   enabled: true
+
   # -- Configure the way to execute database migration. Possible values: job, initContainer
   # When set to job, the migration will be executed as a job on release or upgrade.
-  # When set to initContainer, the migration will be executed when kratos pod is created
+  # When set to initContainer, the migration will be executed when scheduler pod is created
   # Defaults to job
   type: job
+
   # -- Ability to override the entrypoint of the automigration container
   # (e.g. to source dynamic secrets or export environment dynamic variables)
   customCommand:
     - /bin/sh
     - -c
   customArgs:
-    - /app/tooling migrate --host=$(MANAGER_DB_HOST):5432 --user=$(MANAGER_DB_USER) --name=$(MANAGER_DB_NAME) --pass="$(MANAGER_DB_PASSWORD)" --disable_tls=false
+    - /app/tooling migrate --host=$(MANAGER_DB_HOST)--user=$(MANAGER_DB_USER) --name=$(MANAGER_DB_NAME) --pass="$(MANAGER_DB_PASSWORD)" --disable_tls=false
 
-job:
-  # -- If you do want to specify annotations, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'annotations:'.
-  annotations:
-    helm.sh/hook-weight: "1"
-    helm.sh/hook: "pre-install, pre-upgrade"
-    helm.sh/hook-delete-policy: "before-hook-creation,hook-succeeded"
-  # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
-
-  # -- If you want to add extra sidecar containers.
-  extraContainers: ""
-  # extraContainers: |
-  #  - name: ...
-  #    image: ...
-
-  # -- If you want to add extra init containers.
-  extraInitContainers: ""
-  # extraInitContainers: |
-  #  - name: ...
-  #    image: ...
-
-  # -- Array of extra envs to be passed to the job. This takes precedence over deployment variables. Kubernetes format is expected
-  # - name: FOO
-  #   value: BAR
-  extraEnv: [ ]
-
-  # -- Node labels for pod assignment.
-  nodeSelector: { }
-  # If you do want to specify node labels, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'nodeSelector:'.
-  #   foo: bar
-
-  # -- Configure node tolerations.
-  tolerations: [ ]
-
-  # -- If you want to add lifecycle hooks.
-  lifecycle: ""
-  # lifecycle: |
-  #   preStop:
-  #     exec:
-  #       command: [...]
-
-  # -- Set automounting of the SA token
-  automountServiceAccountToken: true
-
-  # -- Set sharing process namespace
-  shareProcessNamespace: false
-
-  # -- Specify the serviceAccountName value.
-  # In some situations it is needed to provides specific permissions to Hydra deployments
-  # Like for example installing Hydra on a cluster with a PosSecurityPolicy and Istio.
-  # Uncoment if it is needed to provide a ServiceAccount for the Hydra deployment.
-  serviceAccount:
-    # -- Specifies whether a service account should be created
-    create: false
-    # -- Annotations to add to the service account
+  job:
+    # -- If you do want to specify annotations, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'annotations:'.
     annotations:
-      helm.sh/hook-weight: "0"
+      helm.sh/hook-weight: "1"
       helm.sh/hook: "pre-install, pre-upgrade"
-      helm.sh/hook-delete-policy: "before-hook-creation"
-    # -- The name of the service account to use. If not set and create is true, a name is generated using the fullname template
-    name: ""
+      helm.sh/hook-delete-policy: "before-hook-creation,hook-succeeded"
 
-  # -- Specify pod metadata, this metadata is added directly to the pod, and not higher objects
-  podMetadata:
-    # -- Extra pod level labels
-    labels: { }
-    # -- Extra pod level annotations
-    annotations: { }
+    # -- If you want to add extra sidecar containers.
+    extraContainers: ""
+    # extraContainers: |
+    #  - name: ...
+    #    image: ...
 
-  spec:
-    # -- Set job back off limit
-    backoffLimit: 10
+    # -- If you want to add extra init containers.
+    extraInitContainers: ""
+    # extraInitContainers: |
+    #  - name: ...
+    #    image: ...
+
+    # -- Array of extra envs to be passed to the job. This takes precedence over deployment variables. Kubernetes format is expected
+    # - name: FOO
+    #   value: BAR
+    extraEnv: [ ]
+
+    # -- Node labels for pod assignment.
+    nodeSelector: { }
+    # If you do want to specify node labels, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'nodeSelector:'.
+    #   foo: bar
+
+    # -- Configure node tolerations.
+    tolerations: [ ]
+
+    # -- If you want to add lifecycle hooks.
+    lifecycle: ""
+    # lifecycle: |
+    #   preStop:
+    #     exec:
+    #       command: [...]
+
+    # -- Set automounting of the SA token
+    automountServiceAccountToken: true
+
+    # -- Set sharing process namespace
+    shareProcessNamespace: false
+
+    # -- Specify the serviceAccountName value.
+    # In some situations it is needed to provides specific permissions to Hydra deployments
+    # Like for example installing Hydra on a cluster with a PosSecurityPolicy and Istio.
+    # Uncomment if it is needed to provide a ServiceAccount for the Hydra deployment.
+    serviceAccount:
+      # -- Specifies whether a service account should be created
+      create: false
+      # -- Annotations to add to the service account
+      annotations:
+        helm.sh/hook-weight: "0"
+        helm.sh/hook: "pre-install, pre-upgrade"
+        helm.sh/hook-delete-policy: "before-hook-creation"
+      # -- The name of the service account to use. If not set and create is true, a name is generated using the fullname template
+      name: ""
+
+    # -- Specify pod metadata, this metadata is added directly to the pod, and not higher objects
+    podMetadata:
+      # -- Extra pod level labels
+      labels: { }
+      # -- Extra pod level annotations
+      annotations: { }
+
+    spec:
+      # -- Set job back off limit
+      backoffLimit: 10

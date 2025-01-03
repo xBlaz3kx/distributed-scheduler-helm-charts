@@ -46,14 +46,9 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 Selector labels
 */}}
 {{- define "distributed-scheduler.selectorLabels" -}}
-{{- if .Args -}}
-app.kubernetes.io/name: {{ .Args.Values.name }}
-app.kubernetes.io/instance: {{ .Args.Values.name }}
-{{- else -}}
 app.kubernetes.io/name: {{ include "distributed-scheduler.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
-{{- end }}
 
 {{/*
 Create the name of the service account to use
@@ -63,16 +58,5 @@ Create the name of the service account to use
 {{- default (include "distributed-scheduler.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
-{{- end }}
-{{- end }}
-
-{{/*
-Check the migration type value and fail if unexpected
-*/}}
-{{- define "distributed-scheduler.automigration.typeVerification" -}}
-{{- if and .Values.automigration.enabled  .Values.automigration.type }}
-  {{- if and (ne .Values.automigration.type "initContainer") (ne .Values.automigration.type "job") }}
-    {{- fail "distributed-scheduler.automigration.type must be either 'initContainer' or 'job'" -}}
-  {{- end }}
 {{- end }}
 {{- end }}
